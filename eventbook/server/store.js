@@ -15,7 +15,10 @@ export async function initStore(uri){
   Event=mongoose.model('Event',new mongoose.Schema({title:String,description:String,category:String,image:String,venue:String,date:Date,ticketCategories:[{name:String,price:Number,availableInventory:Number}],isSeed:{type:Boolean,default:false},createdAt:{type:Date,default:Date.now}}));
   Booking=mongoose.model('Booking',new mongoose.Schema({bookingId:{type:String,unique:true},userId:{type:mongoose.Schema.Types.ObjectId,ref:'User'},eventId:{type:mongoose.Schema.Types.ObjectId,ref:'Event'},groupId:{type:mongoose.Schema.Types.ObjectId,ref:'GroupBooking'},ticketCategory:String,quantity:Number,totalAmount:Number,status:{type:String,default:'confirmed'},secureTicketIdentifier:{type:String,unique:true},createdAt:{type:Date,default:Date.now},cancelledAt:Date,resaleStatus:{type:String,enum:['none','listed'],default:'none'},resalePrice:Number,resaleListedAt:Date,transferHistory:[{fromUserId:mongoose.Schema.Types.ObjectId,toUserId:mongoose.Schema.Types.ObjectId,price:Number,at:{type:Date,default:Date.now}}]}));
   GroupBooking=mongoose.model('GroupBooking',new mongoose.Schema({groupCode:{type:String,unique:true},groupLeaderId:{type:mongoose.Schema.Types.ObjectId,ref:'User'},eventId:{type:mongoose.Schema.Types.ObjectId,ref:'Event'},members:[{userId:{type:mongoose.Schema.Types.ObjectId,ref:'User'},name:String,budget:Number,preferences:[String],vote:String,participationStatus:{type:String,default:'pending'},bookingId:String}],groupStatus:{type:String,default:'open'},selectedTicketCategory:String,createdAt:{type:Date,default:Date.now}}));
-  if(await Event.countDocuments()===0) await Event.insertMany(seed);
+  for(const e of seed){const docs=await Event.find({title:e.title,isSeed:true}).sort({_id:1}).lean();
+   if(!docs.length){await Event.create(e);continue;}
+   if(docs.length>1){const used=new Set((await Booking.distinct('eventId',{eventId:{$in:docs.map(d=>d._id)}})).map(String));const keep=docs.find(d=>used.has(String(d._id)))||docs[0];
+    const drop=docs.filter(d=>String(d._id)!==String(keep._id)&&!used.has(String(d._id))).map(d=>d._id);if(drop.length)await Event.deleteMany({_id:{$in:drop}});}}
   console.log('MongoDB connected');
  } catch(e){console.warn('MongoDB connection failed; using demo memory mode:',e.message); mongo=false;}
 }
